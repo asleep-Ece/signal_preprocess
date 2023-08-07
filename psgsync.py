@@ -4,7 +4,9 @@ import pandas as pd
 import mne
 from pyedflib import highlevel
 from glob import glob
+import argparse
 
+parser = argparse.ArgumentParser(description="PSG data preprocess")
 
 def add_arguments(parser):
     parser.add_argument('--sampling_rate', type=int, default=250, help='Downsampling frequency')
@@ -17,16 +19,23 @@ class PSG_split():
 
         parser = add_arguments(parser)
         self.args = parser.parse_args()
+        sam_rate = self.args.sampling_rate
 
-        DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
-        OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract'
+        self.DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
+        self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract'
 
     def get_edf_dir(self, patient_num, mode='train_data'):
         # Get directory of the PSG edf file
-        sub_edf_path = os.path.join(DATA_DIR, mode, patient_num)
+        sub_edf_path = os.path.join(self.DATA_DIR, mode, patient_num)
         edf_dir = os.path.join(sub_edf_path, patient_num+'_signal', patient_num+'.edf')
-        
-        return edf_dir
+        # Check if there is edf file in the directory
+        if not os.path.isfile(edf_dir):
+            print(f'Patient {patient_num} has no edf file. Skipping...')
+        # If True, return offset, edf, label directory
+        else:
+            offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
+            label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
+            return edf_dir, offset_dir, label_dir
 
     def load_psg_channel(self, edf_dir, patient, channels):
         # Load psg data with selected channels
@@ -111,7 +120,4 @@ class PSG_split():
 
     def calculate_label_starttime():
         '''Find the nearest 30x time from the start time of the xml file'''
-        pass
-
-    def test():
         pass
