@@ -70,3 +70,5 @@ class PSG_split():
         '''Find the nearest 30x time from the start time of the xml file'''
         pass
 
+    def test():
+        pass
