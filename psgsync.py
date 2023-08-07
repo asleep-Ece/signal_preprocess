@@ -43,6 +43,7 @@ class PSG_split():
     def calculate_data_offset(psg_dir):
         '''Cutoff the offset between PSG start time and label start time'''
         epoch = 30
+        psg_epochs = []
         '''divide psg data into 30s with considering the frequency'''
         f = pyedflib.EdfReader(psg_dir)
         for chn in range(f.signals_in_file):
@@ -82,8 +83,11 @@ class PSG_split():
             # divide into 30 seconds based on the number of labels
             raw_data_epochs = np.array_split(raw_data, len(labels))
 
+            #add each raw processed data to main()
 
-    def divide_psg_data():
+
+
+    def save_psg_data():
         '''
         divide psg data into 30s with considering the frequency
             for data_dir in os.listdir(DATA_DIR):
