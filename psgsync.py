@@ -37,24 +37,23 @@ class PSG_split():
             label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
             return edf_dir, offset_dir, label_dir
 
-    def load_psg_channel(self, edf_dir, patient, channels):
-        # Load psg data with selected channels
-        signal_by_channel = []
-        signals = []
-        raw = mne.io.read_raw_edf(edf_dir)
-        for channel in channels:
-            raw_channel_signal = raw.get_data(channel)
-            signal_by_channel.append(raw_channel_signal)
-        signals = np.stack(signals, axis=0)
-
-        return signals
-
-    def calculate_data_offset(psg_dir):
-        '''Cutoff the offset between PSG start time and label start time'''
+    def calculate_data_offset(edf_dir,offset_dir,label_dir):
+        '''
+        1. Cutoff the offset between PSG start time and label start time
+        2. Remove the end rebundent labels and data
+        3. spilit data into 30 seconds
+        
+        return:
+            psg_epochs: processed chns data (length should be chns)
+            psg_names : the names of chns(length should be chns)
+            labels : the processed labels
+        
+        '''
         epoch = 30
         psg_epochs = []
+        psg_names = []
         '''divide psg data into 30s with considering the frequency'''
-        f = pyedflib.EdfReader(psg_dir)
+        f = pyedflib.EdfReader(edf_dir)
         for chn in range(f.signals_in_file):
             if f.getLabel(chn) in self.args.chns:
                 #cal each chn freq
@@ -74,7 +73,7 @@ class PSG_split():
             raw_data = raw_data[startime:]
 
             #get the labels
-            labels = get_labels(psg_dir)
+            labels = pd.read_csv(label_dir,header=None).values
 
             #check if the psg data length > expected lenght (num of labels x 30 seconds)
             flag = len(raw_data)- labels*epoch*raw_rate
@@ -92,11 +91,15 @@ class PSG_split():
             # divide into 30 seconds based on the number of labels
             raw_data_epochs = np.array_split(raw_data, len(labels))
 
-            #add each raw processed data to main()
+            psg_epochs.add(raw_data_epochs)
+            psg_names.add(f.getLabel(chn))
+
+        #return the processed data(chns) from the current patient
+        return psg_epochs,psg_names,labels
 
 
 
-    def save_psg_data():
+    def save_psg_data(self, psg_epochs,psg_names,labels):
         '''
         divide psg data into 30s with considering the frequency
             for data_dir in os.listdir(DATA_DIR):
@@ -108,6 +111,11 @@ class PSG_split():
             if len(patient_list) == 0:
                 continue
         '''
+        ''' 
+            Save each patient's data every 30seconds
+        '''
+
+
         pass
 
     def check_disconnection():
