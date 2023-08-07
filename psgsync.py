@@ -4,7 +4,9 @@ import pandas as pd
 import mne
 from pyedflib import highlevel
 from glob import glob
+import argparse
 
+parser = argparse.ArgumentParser(description="PSG data preprocess")
 
 def add_arguments(parser):
     parser.add_argument('--sampling_rate', type=int, default=250, help='Downsampling frequency')
@@ -17,17 +19,17 @@ class PSG_split():
 
         parser = add_arguments(parser)
         self.args = parser.parse_args()
-        sam_rate = self.args.sam_rate
+        sam_rate = self.args.sampling_rate
 
-        DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
-        OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract'
+        self.DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
+        self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract'
 
     def get_edf_dir(self, patient_num, mode='train_data'):
         # Get directory of the PSG edf file
-        sub_edf_path = os.path.join(DATA_DIR, mode, patient_num)
+        sub_edf_path = os.path.join(self.DATA_DIR, mode, patient_num)
         edf_dir = os.path.join(sub_edf_path, patient_num+'_signal', patient_num+'.edf')
         # Check if there is edf file in the directory
-        if not os.path.isdir(edf_dir):
+        if not os.path.isfile(edf_dir):
             print(f'Patient {patient_num} has no edf file. Skipping...')
         # If True, return offset, edf, label directory
         else:
@@ -49,7 +51,46 @@ class PSG_split():
 
     def calculate_data_offset(psg_dir):
         '''Cutoff the offset between PSG start time and label start time'''
-        pass
+        epoch = 30
+        '''divide psg data into 30s with considering the frequency'''
+        f = pyedflib.EdfReader(psg_dir)
+        for chn in range(f.signals_in_file):
+            if f.getLabel(chn) in self.args.chns:
+                #cal each chn freq
+                raw_rate = f.getSampleFrequency(chn)
+                #read data
+                raw_data = f.readSignal(chn)
+            print("Sfreq : {} | shape: {}".format(raw_rate,len(raw)))
+
+            
+            # clip start_dime offset
+            # get the offset info
+            label_start = pd.read_csv(offset_dir)["label_start"].values[0]
+            raw_start = f.getStartdatetime()
+            raw_start = datetime.datetime.strftime(raw_start,"%H:%M:%S")
+            print("label start time: {} | edf start time: {}".format(label_start,raw_start))
+            startime = ((datetime.datetime.strptime(label_start,"%H:%M:%S")-datetime.datetime.strptime(raw_start,"%H:%M:%S")).seconds)*int(raw_rate)
+            raw_data = raw_data[startime:]
+
+            #get the labels
+            labels = get_labels(psg_dir)
+
+            #check if the psg data length > expected lenght (num of labels x 30 seconds)
+            flag = len(raw_data)- labels*epoch*raw_rate
+
+            if flag == 0:
+                pass
+            elif flag > 0:
+                raw_data = raw_data[:-flag]
+            else:
+                # Discard redundant labels and corresponding data
+                red_labels = (-flag/epoch).ceil()
+                raw_data = raw_data[:-red_labels*epoch]
+                labels = labels[:-red_labels]
+
+            # divide into 30 seconds based on the number of labels
+            raw_data_epochs = np.array_split(raw_data, len(labels))
+
 
     def divide_psg_data():
         '''
@@ -76,8 +117,3 @@ class PSG_split():
     def calculate_label_starttime():
         '''Find the nearest 30x time from the start time of the xml file'''
         pass
-
-# p = add_argument(parser)
-a = PSG_split()
-x,y,z = a.get_edf_dir('data1-596_data')
-print('x,y,z : ', x,y,z)
