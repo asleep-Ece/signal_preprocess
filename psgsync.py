@@ -42,7 +42,46 @@ class PSG_split():
 
     def calculate_data_offset(psg_dir):
         '''Cutoff the offset between PSG start time and label start time'''
-        pass
+        epoch = 30
+        '''divide psg data into 30s with considering the frequency'''
+        f = pyedflib.EdfReader(psg_dir)
+        for chn in range(f.signals_in_file):
+            if f.getLabel(chn) in self.args.chns:
+                #cal each chn freq
+                raw_rate = f.getSampleFrequency(chn)
+                #read data
+                raw_data = f.readSignal(chn)
+            print("Sfreq : {} | shape: {}".format(raw_rate,len(raw)))
+
+            
+            # clip start_dime offset
+            # get the offset info
+            label_start = pd.read_csv(offset_dir)["label_start"].values[0]
+            raw_start = f.getStartdatetime()
+            raw_start = datetime.datetime.strftime(raw_start,"%H:%M:%S")
+            print("label start time: {} | edf start time: {}".format(label_start,raw_start))
+            startime = ((datetime.datetime.strptime(label_start,"%H:%M:%S")-datetime.datetime.strptime(raw_start,"%H:%M:%S")).seconds)*int(raw_rate)
+            raw_data = raw_data[startime:]
+
+            #get the labels
+            labels = get_labels(psg_dir)
+
+            #check if the psg data length > expected lenght (num of labels x 30 seconds)
+            flag = len(raw_data)- labels*epoch*raw_rate
+
+            if flag == 0:
+                pass
+            elif flag > 0:
+                raw_data = raw_data[:-flag]
+            else:
+                # Discard redundant labels and corresponding data
+                red_labels = (-flag/epoch).ceil()
+                raw_data = raw_data[:-red_labels*epoch]
+                labels = labels[:-red_labels]
+
+            # divide into 30 seconds based on the number of labels
+            raw_data_epochs = np.array_split(raw_data, len(labels))
+
 
     def divide_psg_data():
         '''
