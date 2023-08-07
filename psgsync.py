@@ -17,6 +17,7 @@ class PSG_split():
 
         parser = add_arguments(parser)
         self.args = parser.parse_args()
+        sam_rate = self.args.sam_rate
 
         DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
         OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract'
@@ -25,8 +26,14 @@ class PSG_split():
         # Get directory of the PSG edf file
         sub_edf_path = os.path.join(DATA_DIR, mode, patient_num)
         edf_dir = os.path.join(sub_edf_path, patient_num+'_signal', patient_num+'.edf')
-        
-        return edf_dir
+        # Check if there is edf file in the directory
+        if not os.path.isdir(edf_dir):
+            print(f'Patient {patient_num} has no edf file. Skipping...')
+        # If True, return offset, edf, label directory
+        else:
+            offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
+            label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
+            return edf_dir, offset_dir, label_dir
 
     def load_psg_channel(self, edf_dir, patient, channels):
         # Load psg data with selected channels
@@ -70,3 +77,7 @@ class PSG_split():
         '''Find the nearest 30x time from the start time of the xml file'''
         pass
 
+# p = add_argument(parser)
+a = PSG_split()
+x,y,z = a.get_edf_dir('data1-596_data')
+print('x,y,z : ', x,y,z)
