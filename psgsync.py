@@ -62,6 +62,7 @@ class PSG_split():
         '''
         epoch = 30
         psg_epochs = dict()
+<<<<<<< HEAD
         #get the labels
         labels = pd.read_csv(label_dir,header=None).values
 
@@ -69,6 +70,11 @@ class PSG_split():
         f = pyedflib.EdfReader(edf_dir)
         for chn in range(f.signals_in_file):
             temp_labels = labels
+=======
+        '''divide psg data into 30s with considering the frequency'''
+        f = pyedflib.EdfReader(edf_dir)
+        for chn in range(f.signals_in_file):
+>>>>>>> 934e20727a5b74c44cb2fd16918d09f82af5d819
             if f.getLabel(chn) in self.chns:
                 #cal each chn freq
                 raw_rate = f.getSampleFrequency(chn)
@@ -85,12 +91,21 @@ class PSG_split():
                 print("label start time: {} | edf start time: {}".format(label_start,raw_start))
                 startime = ((datetime.datetime.strptime(label_start,"%H:%M:%S")-datetime.datetime.strptime(raw_start,"%H:%M:%S")).seconds)*int(raw_rate)
                 raw_data = raw_data[startime:]
+<<<<<<< HEAD
                 print(f"startoff data lenth {len(raw_data)}")
 
                 
                 #check if the psg data length > expected lenght (num of labels x 30 seconds)
                 flag = len(raw_data)- len(labels)*epoch*raw_rate
                 
+=======
+
+                #get the labels
+                labels = pd.read_csv(label_dir,header=None).values
+
+                #check if the psg data length > expected lenght (num of labels x 30 seconds)
+                flag = len(raw_data)- len(labels)*epoch*raw_rate
+>>>>>>> 934e20727a5b74c44cb2fd16918d09f82af5d819
 
                 if flag == 0:
                     pass
@@ -98,6 +113,7 @@ class PSG_split():
                     raw_data = raw_data[:-flag]
                 else:
                     # Discard redundant labels and corresponding data
+<<<<<<< HEAD
                     red_labels = math.ceil(-flag/(epoch*raw_rate))
                     temp_labels = temp_labels[:-red_labels]
                     print(f"offset: {-flag}, red_labels {red_labels} rate {raw_rate}")
@@ -117,6 +133,21 @@ class PSG_split():
         
         #return the processed data(chns) from the current patient
         return psg_epochs,temp_labels
+=======
+                    red_labels = math.ceil(-flag/epoch)
+                    raw_data = raw_data[:-red_labels*epoch]
+                    
+
+                # divide into 30 seconds based on the number of labels
+                raw_data_epochs = np.array_split(raw_data, len(labels))
+
+                # psg_epochs.append(raw_data_epochs)
+                psg_epochs[f.getLabel(chn)] = raw_data_epochs
+            # psg_names.append(f.getLabel(chn))
+        labels = labels[:-red_labels]
+        #return the processed data(chns) from the current patient
+        return psg_epochs,labels
+>>>>>>> 934e20727a5b74c44cb2fd16918d09f82af5d819
 
     def save_one_psg(self, patient_num, psg_epochs, labels, mode='train'):
         # patient_num : data1-73_data
@@ -124,6 +155,7 @@ class PSG_split():
         os.makedirs(os.path.join(self.OUTPUT_DIR,data_group,mode), exist_ok=True)
     
         split_psg_dir = os.path.join(self.OUTPUT_DIR,data_group,mode,patient_num.split('-')[1]+'_0_')
+<<<<<<< HEAD
 
         print(f"=============")
         print(f"total idx : {len(list(psg_epochs.values())[0])}")
@@ -131,6 +163,10 @@ class PSG_split():
         for idx in range(len(list(psg_epochs.values())[0])):
             split_psg = {key:list(value[idx]) for key, value in psg_epochs.items()} 
 
+=======
+        for idx in range(len(list(psg_epochs.values())[0])):
+            split_psg = {key:list(value[idx]) for key, value in psg_epochs.items()}
+>>>>>>> 934e20727a5b74c44cb2fd16918d09f82af5d819
             with open(split_psg_dir+str(idx)+'.pickle', 'wb') as fw:
                 pickle.dump(split_psg, fw)
 
@@ -181,7 +217,13 @@ print(x,y,z)
 psg_epoch, label = a.calculate_data_offset(x,y,z)
 print(len(list(psg_epoch.values())[0]))
 a.save_one_psg('data1-73_data', psg_epoch, label)
+<<<<<<< HEAD
 with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0.pickle', 'rb') as fr:
     a = pickle.load(fr)
     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
+=======
+with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0', 'rb') as fr:
+    a = pickle.load(fr)
+    print('length : ', len(a['Plethysmogram']), len(a['A1']), a)
+>>>>>>> 934e20727a5b74c44cb2fd16918d09f82af5d819
 # print(len(k.item().get('Plethysmogram')))
