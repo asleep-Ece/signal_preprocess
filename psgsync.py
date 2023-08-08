@@ -148,7 +148,7 @@ class PSG_split():
 
     def check_disconnection():
         '''check whether there are disconnections by file name'''
-        pass
+
 
     def check_xml():
         '''check start time of the disconnected xml file'''
