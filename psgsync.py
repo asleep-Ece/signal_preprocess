@@ -5,6 +5,10 @@ import mne
 from pyedflib import highlevel
 from glob import glob
 import argparse
+import pyedflib
+import datetime
+import math
+import pickle
 
 parser = argparse.ArgumentParser(description="PSG data preprocess")
 
@@ -19,10 +23,10 @@ class PSG_split():
 
         parser = add_arguments(parser)
         self.args = parser.parse_args()
-        sam_rate = self.args.sampling_rate
 
         self.DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
-        self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract'
+        self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract/'
+        self.chns = ['Plethysmogram', 'A1']
 
     def get_edf_dir(self, patient_num, mode='train_data'):
         # Get directory of the PSG edf file
@@ -33,88 +37,129 @@ class PSG_split():
             print(f'Patient {patient_num} has no edf file. Skipping...')
         # If True, return offset, edf, label directory
         else:
-            offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
-            label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
+            if len(patient_num.split('-')[1].split('_')[0])==1:
+                offset_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_offset.csv')
+                label_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_sleep_labels.csv')
+            elif len(patient_num.split('-')[1].split('_')[0])==2:
+                offset_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_offset.csv')
+                label_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_sleep_labels.csv')
+            elif len(patient_num.split('-')[1].split('_')[0])<=3:
+                offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
+                label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
             return edf_dir, offset_dir, label_dir
 
-    def calculate_data_offset(edf_dir,offset_dir,label_dir):
+    def calculate_data_offset(self, edf_dir,offset_dir,label_dir):
         '''
         1. Cutoff the offset between PSG start time and label start time
-        2. Remove the end rebundent labels and data
-        3. spilit data into 30 seconds
+        2. Remove the end redundent labels and data
+        3. split data into 30 seconds
         
         return:
-            psg_epochs: processed chns data (length should be chns)
-            psg_names : the names of chns(length should be chns)
+            psg_epochs: processed chns data (len(psg_epochs) should be #chns)
+            psg_names : the names of chns(len(psg_names) should be #chns)
             labels : the processed labels
         
         '''
         epoch = 30
-        psg_epochs = []
-        psg_names = []
+        psg_epochs = dict()
+        #get the labels
+        labels = pd.read_csv(label_dir,header=None).values
+
         '''divide psg data into 30s with considering the frequency'''
         f = pyedflib.EdfReader(edf_dir)
         for chn in range(f.signals_in_file):
-            if f.getLabel(chn) in self.args.chns:
+            temp_labels = labels
+            if f.getLabel(chn) in self.chns:
                 #cal each chn freq
                 raw_rate = f.getSampleFrequency(chn)
                 #read data
                 raw_data = f.readSignal(chn)
-            print("Sfreq : {} | shape: {}".format(raw_rate,len(raw)))
+                print("Sfreq : {} | shape: {}".format(raw_rate,len(raw_data)))
 
-            
-            # clip start_dime offset
-            # get the offset info
-            label_start = pd.read_csv(offset_dir)["label_start"].values[0]
-            raw_start = f.getStartdatetime()
-            raw_start = datetime.datetime.strftime(raw_start,"%H:%M:%S")
-            print("label start time: {} | edf start time: {}".format(label_start,raw_start))
-            startime = ((datetime.datetime.strptime(label_start,"%H:%M:%S")-datetime.datetime.strptime(raw_start,"%H:%M:%S")).seconds)*int(raw_rate)
-            raw_data = raw_data[startime:]
+                
+                # clip start_dime offset
+                # get the offset info
+                label_start = pd.read_csv(offset_dir)["label_start"].values[0]
+                raw_start = f.getStartdatetime()
+                raw_start = datetime.datetime.strftime(raw_start,"%H:%M:%S")
+                print("label start time: {} | edf start time: {}".format(label_start,raw_start))
+                startime = ((datetime.datetime.strptime(label_start,"%H:%M:%S")-datetime.datetime.strptime(raw_start,"%H:%M:%S")).seconds)*int(raw_rate)
+                raw_data = raw_data[startime:]
+                print(f"startoff data lenth {len(raw_data)}")
 
-            #get the labels
-            labels = pd.read_csv(label_dir,header=None).values
+                
+                #check if the psg data length > expected lenght (num of labels x 30 seconds)
+                flag = len(raw_data)- len(labels)*epoch*raw_rate
+                
 
-            #check if the psg data length > expected lenght (num of labels x 30 seconds)
-            flag = len(raw_data)- labels*epoch*raw_rate
+                if flag == 0:
+                    pass
+                elif flag > 0:
+                    raw_data = raw_data[:-flag]
+                else:
+                    # Discard redundant labels and corresponding data
+                    red_labels = math.ceil(-flag/(epoch*raw_rate))
+                    temp_labels = temp_labels[:-red_labels]
+                    print(f"offset: {-flag}, red_labels {red_labels} rate {raw_rate}")
+                    edd_off = len(raw_data)-len(temp_labels)*epoch*int(raw_rate)
+                    raw_data = raw_data[:-edd_off]
+                    print(f"processed data: {len(raw_data)}")
+                    
+                    print(len(temp_labels))
+                    
+                # divide into 30 seconds based on the number of labels
+                raw_data_epochs = np.split(raw_data, len(temp_labels))
+                print(f"1st data {len(raw_data_epochs[0])} last data {len(raw_data_epochs[-1])}")
+                # psg_epochs.append(raw_data_epochs)
+                psg_epochs[f.getLabel(chn)] = raw_data_epochs
 
-            if flag == 0:
-                pass
-            elif flag > 0:
-                raw_data = raw_data[:-flag]
-            else:
-                # Discard redundant labels and corresponding data
-                red_labels = (-flag/epoch).ceil()
-                raw_data = raw_data[:-red_labels*epoch]
-                labels = labels[:-red_labels]
-
-            # divide into 30 seconds based on the number of labels
-            raw_data_epochs = np.array_split(raw_data, len(labels))
-
-            psg_epochs.add(raw_data_epochs)
-            psg_names.add(f.getLabel(chn))
-
+            # psg_names.append(f.getLabel(chn))
+        
         #return the processed data(chns) from the current patient
-        return psg_epochs,psg_names,labels
+        return psg_epochs,temp_labels
+
+    def save_one_psg(self, patient_num, psg_epochs, labels, mode='train'):
+        # patient_num : data1-73_data
+        data_group = patient_num.split('-')[0]
+        os.makedirs(os.path.join(self.OUTPUT_DIR,data_group,mode), exist_ok=True)
+    
+        split_psg_dir = os.path.join(self.OUTPUT_DIR,data_group,mode,patient_num.split('-')[1]+'_0_')
+
+        print(f"=============")
+        print(f"total idx : {len(list(psg_epochs.values())[0])}")
+
+        for idx in range(len(list(psg_epochs.values())[0])):
+            split_psg = {key:list(value[idx]) for key, value in psg_epochs.items()} 
+
+            with open(split_psg_dir+str(idx)+'.pickle', 'wb') as fw:
+                pickle.dump(split_psg, fw)
+
+        # for idx in range(len(list(psg_epochs.values())[0])):
+        #     for ch in psg_epochs.keys():
+        #         with open(split_psg_dir+str(idx),'ab') as fw:
+        #             pickle.dump(psg_epochs.values()[idx], fw)
+
+        # for i, data in enumerate(list(psg_epochs.values())[0]):
+        #     for ch in psg_epochs.keys():
+        #         with open(split_psg_dir+str(i),'wb') as fw:
+        #             pickle.dump(data, fw)
+            # np.save(split_psg_dir+str(i), data)
 
 
 
     def save_psg_data(self, psg_epochs,psg_names,labels):
         '''
-        divide psg data into 30s with considering the frequency
-            for data_dir in os.listdir(DATA_DIR):
-            sub_edf_path = os.path.join(DATA_DIR, mode, data_dir)
+        divide psg data into 30s with considering the frequencㅛ 
+        Save each patient's data every 30seconds
+        '''
+        for data_dir in os.listdir(self.DATA_DIR):
+            sub_edf_path = os.path.join(self.DATA_DIR, mode, data_dir)
             if not os.path.isdir(sub_edf_path):
                 continue
             patient_list = [os.path.join(sub_edf_path, x) for x in os.listdir(sub_edf_path)]
             patient_list = [x for x in patient_list if os.path.isdir(x)]
             if len(patient_list) == 0:
                 continue
-        '''
-        ''' 
-            Save each patient's data every 30seconds
-        '''
-
 
         pass
 
@@ -129,3 +174,14 @@ class PSG_split():
     def calculate_label_starttime():
         '''Find the nearest 30x time from the start time of the xml file'''
         pass
+
+a = PSG_split(parser)
+x,y,z = a.get_edf_dir('data1-73_data')
+print(x,y,z)
+psg_epoch, label = a.calculate_data_offset(x,y,z)
+print(len(list(psg_epoch.values())[0]))
+a.save_one_psg('data1-73_data', psg_epoch, label)
+with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0.pickle', 'rb') as fr:
+    a = pickle.load(fr)
+    print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
+# print(len(k.item().get('Plethysmogram')))
