@@ -166,7 +166,7 @@ print(x,y,z)
 psg_epoch, label = a.calculate_data_offset(x,y,z)
 print(len(list(psg_epoch.values())[0]))
 a.save_one_psg('data1-73_data', psg_epoch, label)
-with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0', 'rb') as fr:
+with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0.pickle', 'rb') as fr:
     a = pickle.load(fr)
     print('length : ', len(a['Plethysmogram']), len(a['A1']), a)
 # print(len(k.item().get('Plethysmogram')))
