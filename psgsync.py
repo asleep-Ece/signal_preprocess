@@ -164,24 +164,54 @@ class PSG_split():
         pass
 
     def check_disconnection():
-        '''check whether there are disconnections by file name'''
+        '''
+        check whether there are disconnections by file name
+        find out all disconnections patients_id
+        
+        return:
+            patient_id:
+            num_audio: how many times disconnected in one night
+            clips: duriation in each audio
+        '''
+
+
         pass
 
     def check_xml():
-        '''check start time of the disconnected xml file'''
+        '''
+            extract start time of the disconnected xml file
+
+
+        return:
+            clip_times: global time of each disconecting moments
+
+        '''
+
         pass
 
-    def calculate_label_starttime():
-        '''Find the nearest 30x time from the start time of the xml file'''
+    def calculate_disconnection():
+        '''
+        Find the nearest 30x time from the start time of the xml file
+        
+        return:
+             durations: the disconnecting duration in data(notice: may disconnected few times)
+        
+        '''
         pass
 
-a = PSG_split(parser)
-x,y,z = a.get_edf_dir('data1-73_data')
-print(x,y,z)
-psg_epoch, label = a.calculate_data_offset(x,y,z)
-print(len(list(psg_epoch.values())[0]))
-a.save_one_psg('data1-73_data', psg_epoch, label)
-with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0.pickle', 'rb') as fr:
-    a = pickle.load(fr)
-    print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
-# print(len(k.item().get('Plethysmogram')))
+def main():
+    a = PSG_split(parser)
+
+    for f in os.listdir(a.DATA_DIR):
+        print(f)
+    # x,y,z = a.get_edf_dir('data1-73_data')
+    # print(x,y,z)
+    # psg_epoch, label = a.calculate_data_offset(x,y,z)
+    # print(len(list(psg_epoch.values())[0]))
+    # a.save_one_psg('data1-73_data', psg_epoch, label)
+    # with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0.pickle', 'rb') as fr:
+    #     a = pickle.load(fr)
+    #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
+    # print(len(k.item().get('Plethysmogram')))
+
+main()
