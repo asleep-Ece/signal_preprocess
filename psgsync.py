@@ -28,25 +28,17 @@ class PSG_split():
         self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract/'
         self.chns = ['Plethysmogram', 'A1']
 
-    def get_edf_dir(self, patient_num, mode='train_data'):
-        # Get directory of the PSG edf file
-        sub_edf_path = os.path.join(self.DATA_DIR, mode, patient_num)
-        edf_dir = os.path.join(sub_edf_path, patient_num+'_signal', patient_num+'.edf')
-        # Check if there is edf file in the directory
-        if not os.path.isfile(edf_dir):
-            print(f'Patient {patient_num} has no edf file. Skipping...')
-        # If True, return offset, edf, label directory
-        else:
-            if len(patient_num.split('-')[1].split('_')[0])==1:
-                offset_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_offset.csv')
-                label_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_sleep_labels.csv')
-            elif len(patient_num.split('-')[1].split('_')[0])==2:
-                offset_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_offset.csv')
-                label_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_sleep_labels.csv')
-            elif len(patient_num.split('-')[1].split('_')[0])<=3:
-                offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
-                label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
-            return edf_dir, offset_dir, label_dir
+    def get_edf_dir(self, sub_edf_path, patient_num):
+        if len(patient_num.split('-')[1].split('_')[0])==1:
+            offset_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_offset.csv')
+            label_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_sleep_labels.csv')
+        elif len(patient_num.split('-')[1].split('_')[0])==2:
+            offset_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_offset.csv')
+            label_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_sleep_labels.csv')
+        elif len(patient_num.split('-')[1].split('_')[0])<=3:
+            offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
+            label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
+        return offset_dir, label_dir
 
     def calculate_data_offset(self, edf_dir,offset_dir,label_dir):
         '''
@@ -95,7 +87,7 @@ class PSG_split():
                 if flag == 0:
                     pass
                 elif flag > 0:
-                    raw_data = raw_data[:-flag]
+                    raw_data = raw_data[:-int(flag)]
                 else:
                     # Discard redundant labels and corresponding data
                     red_labels = math.ceil(-flag/(epoch*raw_rate))
@@ -104,8 +96,6 @@ class PSG_split():
                     edd_off = len(raw_data)-len(temp_labels)*epoch*int(raw_rate)
                     raw_data = raw_data[:-edd_off]
                     print(f"processed data: {len(raw_data)}")
-                    
-                    print(len(temp_labels))
                     
                 # divide into 30 seconds based on the number of labels
                 raw_data_epochs = np.split(raw_data, len(temp_labels))
@@ -118,7 +108,7 @@ class PSG_split():
         #return the processed data(chns) from the current patient
         return psg_epochs,temp_labels
 
-    def save_one_psg(self, patient_num, psg_epochs, labels, mode='train'):
+    def save_one_psg(self, patient_num, psg_epochs, mode):
         # patient_num : data1-73_data
         data_group = patient_num.split('-')[0]
         os.makedirs(os.path.join(self.OUTPUT_DIR,data_group,mode), exist_ok=True)
@@ -134,34 +124,27 @@ class PSG_split():
             with open(split_psg_dir+str(idx)+'.pickle', 'wb') as fw:
                 pickle.dump(split_psg, fw)
 
-        # for idx in range(len(list(psg_epochs.values())[0])):
-        #     for ch in psg_epochs.keys():
-        #         with open(split_psg_dir+str(idx),'ab') as fw:
-        #             pickle.dump(psg_epochs.values()[idx], fw)
 
-        # for i, data in enumerate(list(psg_epochs.values())[0]):
-        #     for ch in psg_epochs.keys():
-        #         with open(split_psg_dir+str(i),'wb') as fw:
-        #             pickle.dump(data, fw)
-            # np.save(split_psg_dir+str(i), data)
-
-
-
-    def save_psg_data(self, psg_epochs,psg_names,labels):
+    def save_all_psg(self, mode='train'):
         '''
         divide psg data into 30s with considering the frequencㅛ 
         Save each patient's data every 30seconds
         '''
-        for data_dir in os.listdir(self.DATA_DIR):
-            sub_edf_path = os.path.join(self.DATA_DIR, mode, data_dir)
+        # Get directory of the PSG edf file
+        for patient_num in os.listdir(os.path.join(self.DATA_DIR, mode+'_data')):
+            sub_edf_path = os.path.join(self.DATA_DIR, mode+'_data', patient_num)
             if not os.path.isdir(sub_edf_path):
                 continue
-            patient_list = [os.path.join(sub_edf_path, x) for x in os.listdir(sub_edf_path)]
-            patient_list = [x for x in patient_list if os.path.isdir(x)]
-            if len(patient_list) == 0:
+            edf_dir = os.path.join(sub_edf_path, patient_num+'_signal', patient_num+'.edf')
+            # Check if there is edf file in the directory
+            if not os.path.isfile(edf_dir):
+                print(f'Patient {patient_num} has no edf file. Skipping...')
                 continue
-
-        pass
+            else:
+                offset_dir, label_dir = self.get_edf_dir(sub_edf_path, patient_num)
+                psg_epochs, _ = self.calculate_data_offset(edf_dir, offset_dir, label_dir)
+                self.save_one_psg(patient_num, psg_epochs, mode=mode)
+            print(f'Patient {patient_num} has been saved successfully')
 
     def check_disconnection():
         '''
@@ -199,19 +182,13 @@ class PSG_split():
         '''
         pass
 
-def main():
-    a = PSG_split(parser)
-
-    for f in os.listdir(a.DATA_DIR):
-        print(f)
-    # x,y,z = a.get_edf_dir('data1-73_data')
-    # print(x,y,z)
-    # psg_epoch, label = a.calculate_data_offset(x,y,z)
-    # print(len(list(psg_epoch.values())[0]))
-    # a.save_one_psg('data1-73_data', psg_epoch, label)
-    # with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_0.pickle', 'rb') as fr:
-    #     a = pickle.load(fr)
-    #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
-    # print(len(k.item().get('Plethysmogram')))
-
-main()
+a = PSG_split(parser)
+# x,y,z = a.get_edf_dir('data1-73_data')
+# print(x,y,z)
+# psg_epochs, label = a.calculate_data_offset(x,y,z)
+# print(len(list(psg_epochs.values())[0]))
+# a.save_one_psg('data1-73_data', psg_epochs, label)
+a.save_all_psg(mode='train')
+# with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_1012.pickle', 'rb') as fr:
+#     a = pickle.load(fr)
+#     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
