@@ -9,6 +9,7 @@ import pyedflib
 import datetime
 import math
 import pickle
+import re
 
 parser = argparse.ArgumentParser(description="PSG data preprocess")
 
@@ -26,6 +27,7 @@ class PSG_split():
 
         self.DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
         self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract/'
+        self.SOUND_DIR = '/nas/max/tmp_data/dataset_abcd/psg_abc'
         self.chns = ['Plethysmogram', 'A1']
 
     def get_edf_dir(self, sub_edf_path, patient_num):
@@ -35,7 +37,7 @@ class PSG_split():
         elif len(patient_num.split('-')[1].split('_')[0])==2:
             offset_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_offset.csv')
             label_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_sleep_labels.csv')
-        elif len(patient_num.split('-')[1].split('_')[0])<=3:
+        elif len(patient_num.split('-')[1].split('_')[0])>=3:
             offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
             label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
         return offset_dir, label_dir
@@ -121,13 +123,13 @@ class PSG_split():
         for idx in range(len(list(psg_epochs.values())[0])):
             split_psg = {key:list(value[idx]) for key, value in psg_epochs.items()} 
 
-            with open(split_psg_dir+str(idx)+'.pickle', 'wb') as fw:
+            with open(split_psg_dir+str(idx)+'.pkl', 'wb') as fw:
                 pickle.dump(split_psg, fw)
 
 
     def save_all_psg(self, mode='train'):
         '''
-        divide psg data into 30s with considering the frequencㅛ 
+        divide psg data into 30s with considering the frequency
         Save each patient's data every 30seconds
         '''
         # Get directory of the PSG edf file
@@ -144,27 +146,82 @@ class PSG_split():
                 offset_dir, label_dir = self.get_edf_dir(sub_edf_path, patient_num)
                 psg_epochs, _ = self.calculate_data_offset(edf_dir, offset_dir, label_dir)
                 self.save_one_psg(patient_num, psg_epochs, mode=mode)
-            print(f'Patient {patient_num} has been saved successfully')
+            print(f'Patient {patient_num} has been successfully saved')
 
-    def check_disconnection():
-        '''check whether there are disconnections by file name'''
-
+    def check_disconnection(self, group, mode='train'):
+        '''
+        check whether there are disconnections by file name
+        find out all disconnections patients_id
+        /nas/max/temp-data/~~ 에서 disconnected patient list 찾아서 PSG data에 같이 포함되는 데이터만 찾기
+        
+        return:
+            clips (dictionary) : 
+                key : patient id
+                values : duration of each disconnected audio
+        '''
+        # Get all patient num from the sound data and check if there's identical one in PSG
+        sound_patient_list = []
+        psg_patient_list = []
+        disconnection_count = dict()
+        clips = dict()
+        group_sound_path = os.path.join(self.SOUND_DIR, group, mode)
+        # Save patient_list 
+        if group in os.listdir(self.OUTPUT_DIR):
+            for i in os.listdir(group_sound_path):
+                sound_patient_list.append(i.split('_')[0])
+            for i in os.listdir(os.path.join(self.OUTPUT_DIR, group, mode)):
+                psg_patient_list.append(i.split('_')[0])
+        sound_patient_list = list(set(sound_patient_list))
+        psg_patient_list = list(set(psg_patient_list))
+        # Check disconnected 
+        for i in psg_patient_list:
+            # Check if there's identical patient in both data
+            if i in sound_patient_list:
+                duration = []
+                clip_num = dict()
+                for j in os.listdir(group_sound_path):
+                    # Get number of each disconnected data for each patient
+                    if i==re.findall(r'\d+',j)[0] and re.findall(r'\d+',j)[1]!=0: # 모든 patient_id가 같은애들에 대해서
+                        if re.findall(r'\d+',j)[1] not in clip_num.keys() or clip_num[re.findall(r'\d+',j)[1]]<int(re.findall(r'\d+',j)[2]):
+                            clip_num[int(re.findall(r'\d+',j)[1])] = int(re.findall(r'\d+',j)[2])
+                # Only get disconnected patient
+                if len(clip_num.keys())>1:
+                    for _,value in clip_num.items():
+                        duration.append(value*30)
+                    clips[i] = duration
+                else:
+                    print(f"{i} patient haven't disconnected")
+                    continue
+            else:
+                print(f'No {i} patient in {group}')
+                continue
+        return clips
 
     def check_xml():
-        '''check start time of the disconnected xml file'''
+        '''
+            extract start time of the disconnected xml file
+
+
+        return:
+            clip_times: global time of each disconecting moments
+
+        '''
+
         pass
 
-    def calculate_label_starttime():
-        '''Find the nearest 30x time from the start time of the xml file'''
+    def calculate_disconnection():
+        '''
+        Find the nearest 30x time from the start time of the xml file
+        
+        return:
+             durations: the disconnecting duration in data(notice: may disconnected few times)
+        
+        '''
         pass
 
 a = PSG_split(parser)
-# x,y,z = a.get_edf_dir('data1-73_data')
-# print(x,y,z)
-# psg_epochs, label = a.calculate_data_offset(x,y,z)
-# print(len(list(psg_epochs.values())[0]))
-# a.save_one_psg('data1-73_data', psg_epochs, label)
-a.save_all_psg(mode='train')
+# a.save_all_psg(mode='train')
+a.check_disconnection('data1')
 # with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_1012.pickle', 'rb') as fr:
 #     a = pickle.load(fr)
 #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
