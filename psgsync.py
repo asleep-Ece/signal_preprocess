@@ -9,6 +9,9 @@ import pyedflib
 import datetime
 import math
 import pickle
+import xml.etree.ElementTree as ET
+from lxml import etree
+import re
 
 parser = argparse.ArgumentParser(description="PSG data preprocess")
 
@@ -35,7 +38,7 @@ class PSG_split():
         elif len(patient_num.split('-')[1].split('_')[0])==2:
             offset_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_offset.csv')
             label_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_sleep_labels.csv')
-        elif len(patient_num.split('-')[1].split('_')[0])<=3:
+        elif len(patient_num.split('-')[1].split('_')[0])>=3:
             offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
             label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
         return offset_dir, label_dir
@@ -160,27 +163,87 @@ class PSG_split():
 
         pass
 
-    def check_xml():
+    def check_xml(self, group_id,p_id,mode='train'):
         '''
             extract start time of the disconnected xml file
-
 
         return:
             clip_times: global time of each disconecting moments
 
         '''
+        clip_times = [] 
 
-        pass
+        p_dir = os.path.join(self.DATA_DIR,f"{mode}_data", f"data{group_id}-{p_id}_data")
+        pattern = r"video_(\d+).xml"
 
-    def calculate_disconnection():
+        for file in os.listdir(p_dir):
+            match = re.match(pattern, file)
+            if match:
+                #extract begin time
+                xml_dir = os.path.join(p_dir,file)
+                print(xml_dir)
+                # read XML
+                with open(xml_dir, 'r') as file:
+                    xml_content = file.read()
+
+                # matching time
+                pattern = r"<Begin>(.*?)<\/Begin>"
+                matches = re.findall(pattern, xml_content)
+
+                if matches:
+                    for match in matches:
+                    #  %H:%M:%S output
+                        time_format = re.search(r"\d{2}:\d{2}:\d{2}", match)
+                        if time_format:
+                            extracted_time = time_format.group()
+                            print("Extracted time:", extracted_time)
+                            clip_times.append(extracted_time)
+
+                else:
+                    print("No <Begin> elements with time found in the XML.")
+        
+        sorted_clip_times = sorted(clip_times) 
+
+        return sorted_clip_times
+
+    def check_label_start(self, group_id, p_id,mode='train'):
+        offset_dir = os.path.join(self.DATA_DIR, f"data{group_id}-{p_id}_data",f"{mode}_data",f"{p_id}_data_offset.csv")
+        label_start = pd.read_csv(offset_dir)["label_start"].values[0]
+        return label_start
+
+    def calculate_disconnection(self,p_id,num_audio,clips,c_times):
+        epoch = 30
+        dur_time = []
         '''
         Find the nearest 30x time from the start time of the xml file
         
         return:
+             duration_starts:
              durations: the disconnecting duration in data(notice: may disconnected few times)
+             num_disconnections: how many files are dismissed
+
         
         '''
-        pass
+        #label start time as a standaration
+        start = check_label_start(p_id)
+
+        #calculate the disconnecting time
+        for i in range(num_audio):
+            #duration to HH% MM% SS%
+            ConvertedClip = time.strftime("%H:%M:%S", time.gmtime(clips[i]))
+            clipEnd = (datetime.datetime.strptime(start,"%H:%M:%S")+datetime.datetime.strptime(ConvertedClip,"%H:%M:%S"))
+
+            duration = (datetime.datetime.strptime(clip_times[i+1],"%H:%M:%S")-datetime.datetime.strptime(clipEnd,"%H:%M:%S")).seconds
+
+            num_disconnections = math.ceil(duration/epoch)
+
+            dur_time.append(num_disconnections)
+
+
+        return dur_time
+
+    
+
 
 a = PSG_split(parser)
 # x,y,z = a.get_edf_dir('data1-73_data')
@@ -188,7 +251,9 @@ a = PSG_split(parser)
 # psg_epochs, label = a.calculate_data_offset(x,y,z)
 # print(len(list(psg_epochs.values())[0]))
 # a.save_one_psg('data1-73_data', psg_epochs, label)
-a.save_all_psg(mode='train')
+# a.save_all_psg(mode='train')
 # with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_1012.pickle', 'rb') as fr:
 #     a = pickle.load(fr)
 #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
+
+print(a.check_xml(1,461))
