@@ -295,13 +295,42 @@ class PSG_split():
                 a[k][i] += num_disconnections
             a[k][-1]=int(a[k][-1] / epoch)
             dur_time[k]=dur_times
-            print("dis number : ",dur_time[k])
-            print("duration :" , a[k])
+            # print("dis number : ",dur_time[k])
+            # print("duration :" , a[k])
             # break
-        
         return dur_time,a
-    
 
+    def rename_file(self,group_id,mode="train"):
+        psg_dir = os.path.join(self.OUTPUT_DIR,f"data{group_id}",mode)
+        _,clipped = self.calculate_disconnection(group_id)
+
+        for p_id in clipped.keys():
+            print(clipped[p_id])
+            print(p_id)
+            p_dirs=[]
+            psg_pattern = f"{p_id}_data_(\d+)_(\d+).pickle"
+            psg_patients = []
+            patient_data = []
+            for f in os.listdir(psg_dir):
+                match = re.match(psg_pattern,f)
+                if match:
+                    patient_data.append(f)
+                else:
+                    pass
+
+            # print(patient_data)
+            print("================================")
+            for p in range(len(patient_data)):
+                globle_count=0
+                for i, data in enumerate(clipped[p_id]):
+                    for j in range(data):
+                        f_name=f"{p_id}_data_0_{globle_count}.pickle"
+                        if f_name in patient_data[p]:
+                            # patient_data[p]=f"{p_id}_data_{i}_{j}.pickle"
+                            os.rename(os.path.join(psg_dir,f_name),os.path.join(psg_dir,f"{p_id}_data_{i}_{j}.pickle"))
+                        globle_count+=1  
+            # print(patient_data)                             
+            break
 
 a = PSG_split(parser)
 # a.save_all_psg(mode='train')
@@ -319,9 +348,10 @@ a = PSG_split(parser)
 # a.check_disconnection("data1", mode='train')
 # print(a.check_xml(1,449))
 
-dur_time = a.calculate_disconnection(1)
+# dur_time = a.calculate_disconnection(1)
 
 # for i in dur_time.items():
 #     print(i)
 #     break
+a.rename_file(1,mode="train")
 
