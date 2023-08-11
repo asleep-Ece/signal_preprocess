@@ -181,14 +181,15 @@ class PSG_split():
                 clip_num = dict()
                 for j in os.listdir(group_sound_path):
                     # Get number of each disconnected data for each patient
-                    if i==re.findall(r'\d+',j)[0] and re.findall(r'\d+',j)[1]!=0: # 모든 patient_id가 같은애들에 대해서
-                        if re.findall(r'\d+',j)[1] not in clip_num.keys() or clip_num[re.findall(r'\d+',j)[1]]<int(re.findall(r'\d+',j)[2]):
-                            clip_num[int(re.findall(r'\d+',j)[1])] = int(re.findall(r'\d+',j)[2])
+                    if i==re.findall(r'\d+',j)[0] : # 모든 patient_id가 같은애들에 대해서  and re.findall(r'\d+',j)[1]!=0
+                        if re.findall(r'\d+',j)[1] not in clip_num.keys() or clip_num[re.findall(r'\d+',j)[1]]<=int(re.findall(r'\d+',j)[2]):
+                            clip_num[re.findall(r'\d+',j)[1]] = int(re.findall(r'\d+',j)[2])
                 # Only get disconnected patient
                 if len(clip_num.keys())>1:
-                    for _,value in clip_num.items():
-                        duration.append(value*30)
-                    clips[i] = duration
+                    k = sorted(list(clip_num.keys()))
+                    for key in k:
+                        duration.append(clip_num[key]*30)
+                    clips[int(i)] = duration
                 else:
                     print(f"{i} patient haven't disconnected")
                     continue
@@ -221,6 +222,7 @@ class PSG_split():
 
 a = PSG_split(parser)
 # a.save_all_psg(mode='train')
+# Save clips in pkl format
 for i in range(1,4):
     clips = a.check_disconnection('data'+str(i))
     with open('data'+str(i)+'_train_clips.pkl', 'wb') as fw:
