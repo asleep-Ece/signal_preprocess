@@ -10,6 +10,7 @@ import datetime
 import math
 import pickle
 import re
+import time
 
 parser = argparse.ArgumentParser(description="PSG data preprocess")
 
@@ -181,6 +182,7 @@ class PSG_split():
                 clip_num = dict()
                 for j in os.listdir(group_sound_path):
                     # Get number of each disconnected data for each patient
+                    
                     if i==re.findall(r'\d+',j)[0] and re.findall(r'\d+',j)[1]!=0: # 모든 patient_id가 같은애들에 대해서
                         if re.findall(r'\d+',j)[1] not in clip_num.keys() or clip_num[re.findall(r'\d+',j)[1]]<int(re.findall(r'\d+',j)[2]):
                             clip_num[int(re.findall(r'\d+',j)[1])] = int(re.findall(r'\d+',j)[2])
@@ -189,12 +191,15 @@ class PSG_split():
                     for _,value in clip_num.items():
                         duration.append(value*30)
                     clips[i] = duration
+                    print(f"p_id {i}, value : {clips[i]}") 
+                    break
                 else:
                     print(f"{i} patient haven't disconnected")
                     continue
             else:
                 print(f'No {i} patient in {group}')
                 continue
+            
         return clips
 
     def check_xml(self, group_id,p_id,mode='train'):
@@ -213,6 +218,7 @@ class PSG_split():
         for f in os.listdir(p_dir):
             # print(f)
             match = re.match(pattern, f)
+
             # print(match)
             if match:
                 # print(f)
@@ -224,8 +230,9 @@ class PSG_split():
                     xml_content = r.read()
 
                 # matching time
-                p = r"<Begin>(.*?)<\/Begin>"
+                p = r"<Start>(.*?)<\/Start>"
                 matches = re.findall(p, xml_content)
+                print(matches)
 
                 if matches:
                     for match in matches:
@@ -248,13 +255,14 @@ class PSG_split():
         return sorted_clip_times
 
     def check_label_start(self, group_id, p_id,mode='train'):
-        offset_dir = os.path.join(self.DATA_DIR, f"data{group_id}-{p_id}_data",f"{mode}_data",f"{p_id}_data_offset.csv")
+        offset_dir = os.path.join(self.DATA_DIR, f"{mode}_data", f"data{group_id}-{p_id}_data",f"{p_id}_data_offset.csv")
         label_start = pd.read_csv(offset_dir)["label_start"].values[0]
         return label_start
 
-    def calculate_disconnection(self,group_id,p_id,num_audio,clips,c_times):
+    def calculate_disconnection(self,group_id):
         epoch = 30
-        dur_time = []
+        # p_id,num_audio,clips,c_times
+        dur_time = {}
         '''
         Find the nearest 30x time from the start time of the xml file
         
@@ -263,23 +271,42 @@ class PSG_split():
              durations: the disconnecting duration in data(notice: may disconnected few times)
              num_disconnections: how many files are dismissed
         
-        '''
-        #label start time as a standaration
-        start = check_label_start(group_id,p_id)
+        '''      
 
-        #calculate the disconnecting time
-        for i in range(num_audio):
-            #duration to HH% MM% SS%
-            ConvertedClip = time.strftime("%H:%M:%S", time.gmtime(clips[i]))
-            clipEnd = (datetime.datetime.strptime(start,"%H:%M:%S")+datetime.datetime.strptime(ConvertedClip,"%H:%M:%S"))
+        #open corresponding pkl info
+        pkl_dir = os.path.join(f"data{group_id}_train_clips.pkl")
+        with open(pkl_dir, 'rb') as f:
+            a = pickle.load(f)
+        print(f"dictionary keys :{a.keys()}")
 
-            duration = (datetime.datetime.strptime(clip_times[i+1],"%H:%M:%S")-datetime.datetime.strptime(clipEnd,"%H:%M:%S")).seconds
+        #calculate each patient's disconnection's num_epoch
+        for k in a.keys():
+            print(k)
+            #label start time as a standaration
+            start = self.check_label_start(group_id,k)
+            print(f"start time{start}")
+            # get xml time 
+            clip_times = self.check_xml(group_id,k,mode='train')
+            print(clip_times)
+            dur_times=[]
+            for i in range(len(a[k])-1):
+                print(a[k])
+        
+                clipEnd = datetime.datetime.strptime(start,"%H:%M:%S")+datetime.timedelta(seconds = a[k][i])
+                print(f"clipEnd {clipEnd}")
+                clipEnd = datetime.datetime.strftime(clipEnd,"%H:%M:%S")
+                print(f"clipEnd {clipEnd}")
 
-            num_disconnections = math.ceil(duration/epoch)
+                print(f"clip_times {clip_times[i+1]}")
+                duration = (datetime.datetime.strptime(clip_times[i+1],"%H:%M:%S")-datetime.datetime.strptime(clipEnd,"%H:%M:%S")).seconds
+                
 
-            dur_time.append(num_disconnections)
+                num_disconnections = math.ceil(duration/epoch)
 
-
+                dur_times.append(num_disconnections)
+            dur_time[k]=dur_times
+            break
+        
         return dur_time
 
     
@@ -287,10 +314,21 @@ class PSG_split():
 
 a = PSG_split(parser)
 # a.save_all_psg(mode='train')
-# a.check_disconnection('data1')
+# for i in range(1,4):
+#     clips = a.check_disconnection('data'+str(i))
+#     with open('data'+str(i)+'_train_clips.pkl', 'wb') as fw:
+#         pickle.dump(clips, fw)
+    
 # with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_1012.pickle', 'rb') as fr:
 #     a = pickle.load(fr)
 #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
 
-print(a.check_xml(1,461))
-# calculate_disconnection(group_id=1,p_id=461,num_audio=8,clips,c_times)
+
+a.check_disconnection("data1", mode='train')
+# print(a.check_xml(1,547))
+# dur_time = a.calculate_disconnection(1)
+
+# for i in dur_time.items():
+    # print(i)
+    # break
+
