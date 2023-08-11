@@ -221,7 +221,11 @@ class PSG_split():
 
 a = PSG_split(parser)
 # a.save_all_psg(mode='train')
-a.check_disconnection('data1')
+for i in range(1,4):
+    clips = a.check_disconnection('data'+str(i))
+    with open('data'+str(i)+'_train_clips.pkl', 'wb') as fw:
+        pickle.dump(clips, fw)
+    
 # with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_1012.pickle', 'rb') as fr:
 #     a = pickle.load(fr)
 #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
