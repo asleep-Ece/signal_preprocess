@@ -202,7 +202,7 @@ class PSG_split():
             extract start time of the disconnected xml file
 
         return:
-            clip_times: global time of each disconecting moments
+            clip_times: global start ime after each disconecting moments
 
         '''
         clip_times = [] 
@@ -210,20 +210,22 @@ class PSG_split():
         p_dir = os.path.join(self.DATA_DIR,f"{mode}_data", f"data{group_id}-{p_id}_data")
         pattern = r"video_(\d+).xml"
 
-        for file in os.listdir(p_dir):
-            print(file)
-            match = re.match(pattern, file)
+        for f in os.listdir(p_dir):
+            # print(f)
+            match = re.match(pattern, f)
+            # print(match)
             if match:
+                # print(f)
                 #extract begin time
-                xml_dir = os.path.join(p_dir,file)
-                print(xml_dir)
+                xml_dir = os.path.join(p_dir,f)
+                # print(xml_dir)
                 # read XML
-                with open(xml_dir, 'r') as file:
-                    xml_content = file.read()
+                with open(xml_dir, 'r') as r:
+                    xml_content = r.read()
 
                 # matching time
-                pattern = r"<Begin>(.*?)<\/Begin>"
-                matches = re.findall(pattern, xml_content)
+                p = r"<Begin>(.*?)<\/Begin>"
+                matches = re.findall(p, xml_content)
 
                 if matches:
                     for match in matches:
@@ -235,8 +237,12 @@ class PSG_split():
                             clip_times.append(extracted_time)
 
                 else:
+
                     print("No <Begin> elements with time found in the XML.")
-        
+            else:
+                # print(f"File '{f}' did not match the pattern.")
+                pass
+        #ensure the time is from earlist to latest
         sorted_clip_times = sorted(clip_times) 
 
         return sorted_clip_times
@@ -246,7 +252,7 @@ class PSG_split():
         label_start = pd.read_csv(offset_dir)["label_start"].values[0]
         return label_start
 
-    def calculate_disconnection(self,p_id,num_audio,clips,c_times):
+    def calculate_disconnection(self,group_id,p_id,num_audio,clips,c_times):
         epoch = 30
         dur_time = []
         '''
@@ -259,7 +265,7 @@ class PSG_split():
         
         '''
         #label start time as a standaration
-        start = check_label_start(p_id)
+        start = check_label_start(group_id,p_id)
 
         #calculate the disconnecting time
         for i in range(num_audio):
@@ -287,3 +293,4 @@ a = PSG_split(parser)
 #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
 
 print(a.check_xml(1,461))
+# calculate_disconnection(group_id=1,p_id=461,num_audio=8,clips,c_times)
