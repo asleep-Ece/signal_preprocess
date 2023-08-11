@@ -183,7 +183,7 @@ class PSG_split():
                 for j in os.listdir(group_sound_path):
                     # Get number of each disconnected data for each patient
                     
-                    if i==re.findall(r'\d+',j)[0] and re.findall(r'\d+',j)[1]!=0: # 모든 patient_id가 같은애들에 대해서
+                    if i==re.findall(r'\d+',j)[0]: # 모든 patient_id가 같은애들에 대해서
                         if re.findall(r'\d+',j)[1] not in clip_num.keys() or clip_num[re.findall(r'\d+',j)[1]]<int(re.findall(r'\d+',j)[2]):
                             clip_num[int(re.findall(r'\d+',j)[1])] = int(re.findall(r'\d+',j)[2])
                 # Only get disconnected patient
@@ -191,8 +191,8 @@ class PSG_split():
                     for _,value in clip_num.items():
                         duration.append(value*30)
                     clips[i] = duration
-                    print(f"p_id {i}, value : {clips[i]}") 
-                    break
+                    # print(f"p_id {i}, value : {clips[i]}") 
+                    # break
                 else:
                     print(f"{i} patient haven't disconnected")
                     continue
@@ -249,10 +249,8 @@ class PSG_split():
             else:
                 # print(f"File '{f}' did not match the pattern.")
                 pass
-        #ensure the time is from earlist to latest
-        sorted_clip_times = sorted(clip_times) 
 
-        return sorted_clip_times
+        return clip_times
 
     def check_label_start(self, group_id, p_id,mode='train'):
         offset_dir = os.path.join(self.DATA_DIR, f"{mode}_data", f"data{group_id}-{p_id}_data",f"{p_id}_data_offset.csv")
@@ -260,6 +258,7 @@ class PSG_split():
         return label_start
 
     def calculate_disconnection(self,group_id):
+
         epoch = 30
         # p_id,num_audio,clips,c_times
         dur_time = {}
@@ -274,7 +273,7 @@ class PSG_split():
         '''      
 
         #open corresponding pkl info
-        pkl_dir = os.path.join(f"data{group_id}_train_clips.pkl")
+        pkl_dir = os.path.join(f"data{group_id}_train_clips_test.pkl")
         with open(pkl_dir, 'rb') as f:
             a = pickle.load(f)
         print(f"dictionary keys :{a.keys()}")
@@ -290,24 +289,93 @@ class PSG_split():
             print(clip_times)
             dur_times=[]
             for i in range(len(a[k])-1):
+                time_duration = (datetime.datetime.strptime(clip_times[i+1],"%H:%M:%S")-datetime.datetime.strptime(start,"%H:%M:%S")).seconds
+                real_duration = (a[k][i]-1)*30
+                num_disconnections = math.ceil(time_duration/real_duration)
                 print(a[k])
-        
-                clipEnd = datetime.datetime.strptime(start,"%H:%M:%S")+datetime.timedelta(seconds = a[k][i])
-                print(f"clipEnd {clipEnd}")
-                clipEnd = datetime.datetime.strftime(clipEnd,"%H:%M:%S")
-                print(f"clipEnd {clipEnd}")
-
-                print(f"clip_times {clip_times[i+1]}")
-                duration = (datetime.datetime.strptime(clip_times[i+1],"%H:%M:%S")-datetime.datetime.strptime(clipEnd,"%H:%M:%S")).seconds
+                print(a[k][i])
                 
+                # clipEnd = datetime.datetime.strptime(start,"%H:%M:%S")+datetime.timedelta(seconds = (a[k][i])*30)
+                # print(f"clipEnd {clipEnd}")
+                # clipEnd = datetime.datetime.strftime(clipEnd,"%H:%M:%S")
+                # print(f"clipEnd {clipEnd}")
 
-                num_disconnections = math.ceil(duration/epoch)
+                # print(f"clip_times {clip_times[i+1]}")
+                # duration = (datetime.datetime.strptime(clip_times[i+1],"%H:%M:%S")-datetime.datetime.strptime(start,"%H:%M:%S")).seconds
+                # print(duration)
+
+                # num_disconnections = math.ceil(duration/epoch)
 
                 dur_times.append(num_disconnections)
             dur_time[k]=dur_times
+            print(dur_time[k])
             break
         
         return dur_time
+    def check_disconnection_1(self, group='1', mode='train'):
+        #get all sound patients
+        group_dir = os.path.join(self.SOUND_DIR,f"data{group}",mode)
+
+        sound_pattern = f"(\d+)_data_(\d+)_(\d+).npy"
+        sound_patients = []
+        for data_string in os.listdir(group_dir):
+            match = re.match(sound_pattern, data_string)
+            if match:
+                u_id = match.group(1)
+                if u_id not in sound_patients:
+                    sound_patients.append(u_id)
+            else:
+                pass
+
+        
+        #get all psg patients
+        psg_dir = os.path.join(self.DATA_DIR,f"{mode}_data")
+
+        psg_pattern = f"data{group}-(\d+)_data"
+        psg_patients = []
+        for f in os.listdir(psg_dir):
+            match = re.match(psg_pattern,f)
+            if match:
+                u_id = match.group(1)
+                if u_id not in psg_patients:
+                    psg_patients.append(u_id)
+            else:
+                pass
+        overlap_patients=list(set(sound_patients)&set(psg_patients))
+
+        #check overlap patient to test if there is disconnection
+        p_clips={}
+        for p in overlap_patients:
+            clips={}
+
+            dis_pattern = f"{p}_data_(\d+)_(\d+).npy"
+            for f_name in os.listdir(group_dir):
+                match = re.match(dis_pattern, f_name)
+                if match:
+                    # nth time disconnect
+                    clip_num = int(match.group(1))
+                    # epoch_count = match.group(2)
+                    if clip_num not in clips.keys():
+                        clips[clip_num]=1
+                    else:
+                        clips[clip_num] = clips[clip_num]+1
+
+                else:
+                    pass
+            if(len(list(clips.keys()))>1):
+                temp = []
+                for i in range(len(list(clips.keys()))):
+                    temp.append(clips[i])
+                print(temp)
+                p_clips[p]=temp
+                print(f"patient {p}, clips {p_clips[p]}")
+                with open(f'data{group}_train_clips_test.pkl', 'wb') as fw:
+                    pickle.dump(p_clips, fw)
+                break
+            else:
+                pass
+
+        return p_clips
 
     
 
@@ -323,12 +391,13 @@ a = PSG_split(parser)
 #     a = pickle.load(fr)
 #     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
 
+# a.check_disconnection_1()
+# a.check_disconnection("data1", mode='train')
+# print(a.check_xml(1,449))
 
-a.check_disconnection("data1", mode='train')
-# print(a.check_xml(1,547))
-# dur_time = a.calculate_disconnection(1)
+dur_time = a.calculate_disconnection(1)
 
 # for i in dur_time.items():
-    # print(i)
-    # break
+#     print(i)
+#     break
 
