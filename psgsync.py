@@ -20,11 +20,12 @@ def add_arguments(parser):
     return parser
 
 class PSG_split():
-    def __init__(self, parser):
+    def __init__(self, parser, mode):
         super(PSG_split, self).__init__()
 
         parser = add_arguments(parser)
         self.args = parser.parse_args()
+        self.mode = mode    # 'train' or 'test'
 
         self.DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
         self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract/'
@@ -32,13 +33,15 @@ class PSG_split():
         self.chns = ['Plethysmogram', 'A1']
 
     def get_edf_dir(self, sub_edf_path, patient_num):
-        if len(patient_num.split('-')[1].split('_')[0])==1:
+        p = patient_num.split('-')[1].split('_')[0]
+        # Some offset and labels csv files have 0 in front of the file name
+        if len(p)==1:
             offset_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_offset.csv')
             label_dir = os.path.join(sub_edf_path, '00'+patient_num.split('-')[1]+'_sleep_labels.csv')
-        elif len(patient_num.split('-')[1].split('_')[0])==2:
+        elif len(p)==2:
             offset_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_offset.csv')
             label_dir = os.path.join(sub_edf_path, '0'+patient_num.split('-')[1]+'_sleep_labels.csv')
-        elif len(patient_num.split('-')[1].split('_')[0])>=3:
+        elif len(p)>=3:
             offset_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_offset.csv')
             label_dir = os.path.join(sub_edf_path, patient_num.split('-')[1]+'_sleep_labels.csv')
         return offset_dir, label_dir
@@ -111,12 +114,12 @@ class PSG_split():
         #return the processed data(chns) from the current patient
         return psg_epochs,temp_labels
 
-    def save_one_psg(self, patient_num, psg_epochs, mode):
+    def save_one_psg(self, patient_num, psg_epochs):
         # patient_num : data1-73_data
         data_group = patient_num.split('-')[0]
-        os.makedirs(os.path.join(self.OUTPUT_DIR,data_group,mode), exist_ok=True)
+        os.makedirs(os.path.join(self.OUTPUT_DIR,data_group,self.mode), exist_ok=True)
     
-        split_psg_dir = os.path.join(self.OUTPUT_DIR,data_group,mode,patient_num.split('-')[1]+'_0_')
+        split_psg_dir = os.path.join(self.OUTPUT_DIR,data_group,self.mode,patient_num.split('-')[1]+'_0_')
 
         print(f"=============")
         print(f"total idx : {len(list(psg_epochs.values())[0])}")
@@ -128,14 +131,14 @@ class PSG_split():
                 pickle.dump(split_psg, fw)
 
 
-    def save_all_psg(self, mode='train'):
+    def save_all_psg(self):
         '''
         divide psg data into 30s with considering the frequency
         Save each patient's data every 30seconds
         '''
         # Get directory of the PSG edf file
-        for patient_num in os.listdir(os.path.join(self.DATA_DIR, mode+'_data')):
-            sub_edf_path = os.path.join(self.DATA_DIR, mode+'_data', patient_num)
+        for patient_num in os.listdir(os.path.join(self.DATA_DIR, self.mode+'_data')):
+            sub_edf_path = os.path.join(self.DATA_DIR, self.mode+'_data', patient_num)
             if not os.path.isdir(sub_edf_path):
                 continue
             edf_dir = os.path.join(sub_edf_path, patient_num+'_signal', patient_num+'.edf')
@@ -146,14 +149,14 @@ class PSG_split():
             else:
                 offset_dir, label_dir = self.get_edf_dir(sub_edf_path, patient_num)
                 psg_epochs, _ = self.calculate_data_offset(edf_dir, offset_dir, label_dir)
-                self.save_one_psg(patient_num, psg_epochs, mode=mode)
+                self.save_one_psg(patient_num, psg_epochs)
             print(f'Patient {patient_num} has been successfully saved')
 
-    def check_disconnection(self, group, mode='train'):
+    def check_disconnection(self, group):
         '''
-        check whether there are disconnections by file name
-        find out all disconnections patients_id
-        /nas/max/temp-data/~~ 에서 disconnected patient list 찾아서 PSG data에 같이 포함되는 데이터만 찾기
+        Check whether there are disconnections by file name
+        Find out all disconnections with patients_id
+        Return the duration of each disconnected sound data for each patient
         
         return:
             clips (dictionary) : 
@@ -166,12 +169,12 @@ class PSG_split():
         disconnection_count = dict()
         clips = dict()
         pattern = r'\d+'
-        group_sound_path = os.path.join(self.SOUND_DIR, group, mode)
+        group_sound_path = os.path.join(self.SOUND_DIR, group, self.mode)
         # Save patient_list 
         if group in os.listdir(self.OUTPUT_DIR):
             for i in os.listdir(group_sound_path):
                 sound_patient_list.append(i.split('_')[0])
-            for i in os.listdir(os.path.join(self.OUTPUT_DIR, group, mode)):
+            for i in os.listdir(os.path.join(self.OUTPUT_DIR, group, self.mode)):
                 psg_patient_list.append(i.split('_')[0])
         sound_patient_list = list(set(sound_patient_list))
         psg_patient_list = list(set(psg_patient_list))
@@ -183,7 +186,7 @@ class PSG_split():
                 clip_num = dict()
                 for j in os.listdir(group_sound_path):
                     # Get number of each disconnected data for each patient
-                    if i==re.findall(pattern,j)[0] : # 모든 patient_id가 같은애들에 대해서  and re.findall(r'\d+',j)[1]!=0
+                    if i==re.findall(pattern,j)[0] :
                         if re.findall(pattern,j)[1] not in clip_num.keys() or clip_num[re.findall(pattern,j)[1]]<=int(re.findall(pattern,j)[2]):
                             clip_num[re.findall(pattern,j)[1]] = int(re.findall(pattern,j)[2])
                 # Only get disconnected patient
@@ -201,7 +204,7 @@ class PSG_split():
             
         return clips
 
-    def check_xml(self, group ,p_id, mode='train'):
+    def check_xml(self, group ,p_id):
         '''
             extract start time of the disconnected xml file
 
@@ -211,7 +214,7 @@ class PSG_split():
         '''
         clip_times = [] 
 
-        p_dir = os.path.join(self.DATA_DIR,f"{mode}_data", f"{group}-{p_id}_data")
+        p_dir = os.path.join(self.DATA_DIR,f"{self.mode}_data", f"{group}-{p_id}_data")
         pattern = r"video_(\d+).xml"
 
         for f in os.listdir(p_dir):
@@ -246,8 +249,8 @@ class PSG_split():
 
         return clip_times
 
-    def check_label_start(self, group, p_id,mode='train'):
-        offset_dir = os.path.join(self.DATA_DIR, f"{mode}_data", f"{group}-{p_id}_data",f"{p_id}_data_offset.csv")
+    def check_label_start(self, group, p_id):
+        offset_dir = os.path.join(self.DATA_DIR, f"{self.mode}_data", f"{group}-{p_id}_data",f"{p_id}_data_offset.csv")
         label_start = pd.read_csv(offset_dir)["label_start"].values[0]
         return label_start
 
@@ -267,21 +270,21 @@ class PSG_split():
         '''      
 
         #open corresponding pkl info
-        pkl_dir = os.path.join(f"{group}_train_clips.pkl")
+        pkl_dir = os.path.join(f"{group}_{self.mode}_clips.pkl")
         with open(pkl_dir, 'rb') as f:
-            a = pickle.load(f)
+            clip = pickle.load(f)
 
         #calculate each patient's disconnection's num_epoch
-        for k in a.keys():
+        for k in clip.keys():
             #label start time as a standaration
             start = self.check_label_start(group,k)
             # get xml time 
-            clip_times = self.check_xml(group,k,mode='train')
+            clip_times = self.check_xml(group,k)
             dur_times=[]
             clip_times[0]=start
-            for i in range(len(a[k])-1):
-                a[k][i] = a[k][i]+epoch
-                clipEnd = datetime.datetime.strptime(clip_times[i],"%H:%M:%S")+datetime.timedelta(seconds = (a[k][i]))
+            for i in range(len(clip[k])-1):
+                clip[k][i] = clip[k][i]+epoch
+                clipEnd = datetime.datetime.strptime(clip_times[i],"%H:%M:%S")+datetime.timedelta(seconds = (clip[k][i]))
                 clipEnd = datetime.datetime.strftime(clipEnd,"%H:%M:%S")
                 # print(f"clipEnd {clipEnd}")
 
@@ -292,54 +295,65 @@ class PSG_split():
                 num_disconnections = math.ceil(duration/epoch)
 
                 dur_times.append(num_disconnections)
-                a[k][i]= int(a[k][i] / epoch)
-                a[k][i] += num_disconnections
-            a[k][-1]=int(a[k][-1] / epoch)
+                clip[k][i]= int(clip[k][i] / epoch)
+                clip[k][i] += num_disconnections
+            clip[k][-1]=int(clip[k][-1] / epoch)
             dur_time[k]=dur_times
-            # print("dis number : ",dur_time[k])
-            # print("duration :" , a[k])
-            # break
+        return dur_time,clip
+
+    def rename_file(self,group):
+        psg_dir = os.path.join(self.OUTPUT_DIR,group,self.mode)
+        _,clipped = self.calculate_disconnection(group)
+
+        # Get all split sessions for each patient
+        for p_id in clipped.keys():
+            print(clipped[p_id])
+            print(p_id)
+            p_dirs=[]
+            psg_pattern = f"{p_id}_data_(\d+)_(\d+).pkl"
+            psg_patients = []
+            patient_data = []
+            for f in os.listdir(psg_dir):
+                match = re.match(psg_pattern,f)
+                if match:
+                    patient_data.append(f)
+                else:
+                    pass
+
+            # print(patient_data)
+            print("================================")
+            # Rename the pkl files whenever there are disconnections
+            for p in range(len(patient_data)):
+                global_count=0
+                for i, data in enumerate(clipped[p_id]):
+                    for j in range(data):
+                        f_name=f"{p_id}_data_0_{global_count}.pkl"
+                        if f_name in patient_data[p]:
+                            # patient_data[p]=f"{p_id}_data_{i}_{j}.pickle"
+                            os.rename(os.path.join(psg_dir,f_name),os.path.join(psg_dir,f"{p_id}_data_{i}_{j}.pkl"))
+                        global_count+=1  
+            # print(patient_data)                             
+            break
+
+
+if __name__ == "__main__":
+    SOUND_DIR = '/nas/max/tmp_data/dataset_abcd/psg_abc'
+    process_train = PSG_split(parser, mode='train')
+    process_test = PSG_split(parser, mode='test')
+
+    # Save all psg data to OUTPUT_DIR
+    process_train.save_all_psg()
+    process_test.save_all_psg()
+
+    #Save clips in pkl format
+    for group in os.listdir(SOUND_DIR):  # Currently there are upto data5 group
+        clips_train = process_train.check_disconnection(group)
+        clips_test = process_test.check_disconnection(group)
         
-        return dur_time,a
-
-    def rename_file(self, group_id, mode='train'):
-        pattern = r'\d+'
-        _, clipped = self.calculate_disconnection(group_id)
-        for key,value in clipped.items():
-            for idx, dur in enumerate(value):
-                for f in os.listdir(os.path.join(self.OUTPUT_DIR, 'data'+str(group_id), mode)):
-                    if key==re.findall(pattern, f)[0]:
-                        num_id = re.findall(pattern, f)[2]
-                        # Compare num_id with final number of split sessions
-                        if num_id <= dur:
-                            print(f'{key}_data_{idx}_{re.findall(pattern,f)[2]}')
-                            
-
-
-
-    
-
-
-a = PSG_split(parser)
-# a.save_all_psg(mode='train')
-# Save clips in pkl format
-# for i in range(1,4):
-#     clips = a.check_disconnection('data'+str(i))
-#     with open('data'+str(i)+'_train_clips.pkl', 'wb') as fw:
-#         pickle.dump(clips, fw)
-    
-# with open('/nas/SNUBH-PSG_signal_extract/signal_extract/data1/train/73_data_0_1012.pickle', 'rb') as fr:
-#     a = pickle.load(fr)
-#     print('length : ', len(a['Plethysmogram']), len(a['A1']), len(a))
-
-# a.check_disconnection_1()
-# a.check_disconnection("data1", mode='train')
-# print(a.check_xml(1,449))
-
-# dur_time = a.calculate_disconnection(1)
-a.rename_file(1)
-
-# for i in dur_time.items():
-#     print(i)
-#     break
+        with open(f'{group}_train_clips.pkl', 'wb') as fw:
+            pickle.dump(clips_train, fw)
+        with open(f'{group}_test_clips.pkl', 'wb') as fw:
+            pickle.dump(clips_test, fw)
+        
+        a.rename_file(group)
 
