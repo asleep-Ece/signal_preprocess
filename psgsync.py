@@ -165,6 +165,7 @@ class PSG_split():
         psg_patient_list = []
         disconnection_count = dict()
         clips = dict()
+        pattern = r'\d+'
         group_sound_path = os.path.join(self.SOUND_DIR, group, mode)
         # Save patient_list 
         if group in os.listdir(self.OUTPUT_DIR):
@@ -182,9 +183,9 @@ class PSG_split():
                 clip_num = dict()
                 for j in os.listdir(group_sound_path):
                     # Get number of each disconnected data for each patient
-                    if i==re.findall(r'\d+',j)[0] : # 모든 patient_id가 같은애들에 대해서  and re.findall(r'\d+',j)[1]!=0
-                        if re.findall(r'\d+',j)[1] not in clip_num.keys() or clip_num[re.findall(r'\d+',j)[1]]<=int(re.findall(r'\d+',j)[2]):
-                            clip_num[re.findall(r'\d+',j)[1]] = int(re.findall(r'\d+',j)[2])
+                    if i==re.findall(pattern,j)[0] : # 모든 patient_id가 같은애들에 대해서  and re.findall(r'\d+',j)[1]!=0
+                        if re.findall(pattern,j)[1] not in clip_num.keys() or clip_num[re.findall(pattern,j)[1]]<=int(re.findall(pattern,j)[2]):
+                            clip_num[re.findall(pattern,j)[1]] = int(re.findall(pattern,j)[2])
                 # Only get disconnected patient
                 if len(clip_num.keys())>1:
                     k = sorted(list(clip_num.keys()))
@@ -200,7 +201,7 @@ class PSG_split():
             
         return clips
 
-    def check_xml(self, group_id,p_id,mode='train'):
+    def check_xml(self, group ,p_id, mode='train'):
         '''
             extract start time of the disconnected xml file
 
@@ -210,7 +211,7 @@ class PSG_split():
         '''
         clip_times = [] 
 
-        p_dir = os.path.join(self.DATA_DIR,f"{mode}_data", f"data{group_id}-{p_id}_data")
+        p_dir = os.path.join(self.DATA_DIR,f"{mode}_data", f"{group}-{p_id}_data")
         pattern = r"video_(\d+).xml"
 
         for f in os.listdir(p_dir):
@@ -245,12 +246,12 @@ class PSG_split():
 
         return clip_times
 
-    def check_label_start(self, group_id, p_id,mode='train'):
-        offset_dir = os.path.join(self.DATA_DIR, f"{mode}_data", f"data{group_id}-{p_id}_data",f"{p_id}_data_offset.csv")
+    def check_label_start(self, group, p_id,mode='train'):
+        offset_dir = os.path.join(self.DATA_DIR, f"{mode}_data", f"{group}-{p_id}_data",f"{p_id}_data_offset.csv")
         label_start = pd.read_csv(offset_dir)["label_start"].values[0]
         return label_start
 
-    def calculate_disconnection(self,group_id):
+    def calculate_disconnection(self,group):
 
         epoch = 30
         # p_id,num_audio,clips,c_times
@@ -266,16 +267,16 @@ class PSG_split():
         '''      
 
         #open corresponding pkl info
-        pkl_dir = os.path.join(f"data{group_id}_train_clips.pkl")
+        pkl_dir = os.path.join(f"{group}_train_clips.pkl")
         with open(pkl_dir, 'rb') as f:
             a = pickle.load(f)
 
         #calculate each patient's disconnection's num_epoch
         for k in a.keys():
             #label start time as a standaration
-            start = self.check_label_start(group_id,k)
+            start = self.check_label_start(group,k)
             # get xml time 
-            clip_times = self.check_xml(group_id,k,mode='train')
+            clip_times = self.check_xml(group,k,mode='train')
             dur_times=[]
             clip_times[0]=start
             for i in range(len(a[k])-1):
@@ -295,11 +296,27 @@ class PSG_split():
                 a[k][i] += num_disconnections
             a[k][-1]=int(a[k][-1] / epoch)
             dur_time[k]=dur_times
-            print("dis number : ",dur_time[k])
-            print("duration :" , a[k])
+            # print("dis number : ",dur_time[k])
+            # print("duration :" , a[k])
             # break
         
         return dur_time,a
+
+    def rename_file(self, group_id, mode='train'):
+        pattern = r'\d+'
+        _, clipped = self.calculate_disconnection(group_id)
+        for key,value in clipped.items():
+            for idx, dur in enumerate(value):
+                for f in os.listdir(os.path.join(self.OUTPUT_DIR, 'data'+str(group_id), mode)):
+                    if key==re.findall(pattern, f)[0]:
+                        num_id = re.findall(pattern, f)[2]
+                        # Compare num_id with final number of split sessions
+                        if num_id <= dur:
+                            print(f'{key}_data_{idx}_{re.findall(pattern,f)[2]}')
+                            
+
+
+
     
 
 
@@ -319,7 +336,8 @@ a = PSG_split(parser)
 # a.check_disconnection("data1", mode='train')
 # print(a.check_xml(1,449))
 
-dur_time = a.calculate_disconnection(1)
+# dur_time = a.calculate_disconnection(1)
+a.rename_file(1)
 
 # for i in dur_time.items():
 #     print(i)
