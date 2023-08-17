@@ -30,7 +30,7 @@ class PSG_split():
         self.DATA_DIR = '/nas/SNUBH-PSG_signal_extract/'
         self.OUTPUT_DIR = '/nas/SNUBH-PSG_signal_extract/signal_extract/'
         self.SOUND_DIR = '/nas/max/tmp_data/dataset_abcd/psg_abc'
-        self.chns = ['Plethysmogram', 'A1']
+        self.chns = ['Plethysmogram', 'C3-A2','C4-A1','F3-A2','F4-A1','LOC','ROC','O1-A2','O2-A1']
 
     def get_edf_dir(self, sub_edf_path, patient_num):
         p = patient_num.split('-')[1].split('_')[0]
@@ -72,7 +72,7 @@ class PSG_split():
                 raw_rate = f.getSampleFrequency(chn)
                 #read data
                 raw_data = f.readSignal(chn)
-                print("Sfreq : {} | shape: {}".format(raw_rate,len(raw_data)))
+                # print("Sfreq : {} | shape: {}".format(raw_rate,len(raw_data)))
 
                 
                 # clip start_dime offset
@@ -80,10 +80,10 @@ class PSG_split():
                 label_start = pd.read_csv(offset_dir)["label_start"].values[0]
                 raw_start = f.getStartdatetime()
                 raw_start = datetime.datetime.strftime(raw_start,"%H:%M:%S")
-                print("label start time: {} | edf start time: {}".format(label_start,raw_start))
+                # print("label start time: {} | edf start time: {}".format(label_start,raw_start))
                 startime = ((datetime.datetime.strptime(label_start,"%H:%M:%S")-datetime.datetime.strptime(raw_start,"%H:%M:%S")).seconds)*int(raw_rate)
                 raw_data = raw_data[startime:]
-                print(f"startoff data lenth {len(raw_data)}")
+                # print(f"startoff data lenth {len(raw_data)}")
 
                 
                 #check if the psg data length > expected lenght (num of labels x 30 seconds)
@@ -105,7 +105,7 @@ class PSG_split():
                     
                 # divide into 30 seconds based on the number of labels
                 raw_data_epochs = np.split(raw_data, len(temp_labels))
-                print(f"1st data {len(raw_data_epochs[0])} last data {len(raw_data_epochs[-1])}")
+                # print(f"1st data {len(raw_data_epochs[0])} last data {len(raw_data_epochs[-1])}")
                 # psg_epochs.append(raw_data_epochs)
                 psg_epochs[f.getLabel(chn)] = raw_data_epochs
 
@@ -115,7 +115,7 @@ class PSG_split():
         return psg_epochs,temp_labels
 
     def save_one_psg(self, patient_num, psg_epochs):
-        # patient_num : data1-73_data
+        # patient_num format : data1-73_data
         data_group = patient_num.split('-')[0]
         os.makedirs(os.path.join(self.OUTPUT_DIR,data_group,self.mode), exist_ok=True)
     
@@ -333,12 +333,13 @@ class PSG_split():
                             os.rename(os.path.join(psg_dir,f_name),os.path.join(psg_dir,f"{p_id}_data_{i}_{j}.pkl"))
                         global_count+=1  
             # print(patient_data)                             
-            break
+            # break
 
 
 if __name__ == "__main__":
     SOUND_DIR = '/nas/max/tmp_data/dataset_abcd/psg_abc'
     process_train = PSG_split(parser, mode='train')
+    parser = argparse.ArgumentParser(description="PSG data preprocess")
     process_test = PSG_split(parser, mode='test')
 
     # Save all psg data to OUTPUT_DIR
@@ -355,5 +356,6 @@ if __name__ == "__main__":
         with open(f'{group}_test_clips.pkl', 'wb') as fw:
             pickle.dump(clips_test, fw)
         
-        a.rename_file(group)
+        clips_train.rename_file(group)
+        clips_test.rename_file(group)
 
