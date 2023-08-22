@@ -12,6 +12,7 @@ import pickle
 import re
 import time
 from tqdm import tqdm
+import scipy
 
 parser = argparse.ArgumentParser(description="PSG data preprocess")
 
@@ -60,6 +61,7 @@ class PSG_split():
         
         '''
         epoch = 30
+        re_freq = 250
         psg_epochs = dict()
         #get the labels
         labels = pd.read_csv(label_dir,header=None).values
@@ -102,7 +104,8 @@ class PSG_split():
                     # print(f"offset: {-flag}, red_labels {red_labels} rate {raw_rate}")
                     edd_off = len(raw_data)-len(temp_labels)*epoch*int(raw_rate)
                     raw_data = raw_data[:-edd_off]
-                    # print(f"processed data: {len(raw_data)}")
+                    raw_data = scipy.signal.resample(raw_data,int(len(raw_data)/(raw_rate/re_freq)))
+                    print(f"processed data: {len(raw_data)}")
                     
                 # divide into 30 seconds based on the number of labels
                 raw_data_epochs = np.split(raw_data, len(temp_labels))
