@@ -11,6 +11,7 @@ import math
 import pickle
 import re
 import time
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description="PSG data preprocess")
 
@@ -98,10 +99,10 @@ class PSG_split():
                     # Discard redundant labels and corresponding data
                     red_labels = math.ceil(-flag/(epoch*raw_rate))
                     temp_labels = temp_labels[:-red_labels]
-                    print(f"offset: {-flag}, red_labels {red_labels} rate {raw_rate}")
+                    # print(f"offset: {-flag}, red_labels {red_labels} rate {raw_rate}")
                     edd_off = len(raw_data)-len(temp_labels)*epoch*int(raw_rate)
                     raw_data = raw_data[:-edd_off]
-                    print(f"processed data: {len(raw_data)}")
+                    # print(f"processed data: {len(raw_data)}")
                     
                 # divide into 30 seconds based on the number of labels
                 raw_data_epochs = np.split(raw_data, len(temp_labels))
@@ -121,8 +122,8 @@ class PSG_split():
     
         split_psg_dir = os.path.join(self.OUTPUT_DIR,data_group,self.mode,patient_num.split('-')[1]+'_0_')
 
-        print(f"=============")
-        print(f"total idx : {len(list(psg_epochs.values())[0])}")
+        # print(f"=============")
+        # print(f"total idx : {len(list(psg_epochs.values())[0])}")
 
         for idx in range(len(list(psg_epochs.values())[0])):
             split_psg = {key:list(value[idx]) for key, value in psg_epochs.items()} 
@@ -137,7 +138,7 @@ class PSG_split():
         Save each patient's data every 30seconds
         '''
         # Get directory of the PSG edf file
-        for patient_num in os.listdir(os.path.join(self.DATA_DIR, self.mode+'_data')):
+        for patient_num in tqdm(os.listdir(os.path.join(self.DATA_DIR, self.mode+'_data'))):
             sub_edf_path = os.path.join(self.DATA_DIR, self.mode+'_data', patient_num)
             if not os.path.isdir(sub_edf_path):
                 continue
@@ -343,11 +344,11 @@ if __name__ == "__main__":
     process_test = PSG_split(parser, mode='test')
 
     # Save all psg data to OUTPUT_DIR
-    process_train.save_all_psg()
-    process_test.save_all_psg()
+    # process_train.save_all_psg()
+    # process_test.save_all_psg()
 
     #Save clips in pkl format
-    for group in os.listdir(SOUND_DIR):  # Currently there are upto data5 group
+    for group in tqdm(os.listdir(SOUND_DIR)):  # Currently there are upto data5 group
         clips_train = process_train.check_disconnection(group)
         clips_test = process_test.check_disconnection(group)
         
@@ -356,6 +357,6 @@ if __name__ == "__main__":
         with open(f'{group}_test_clips.pkl', 'wb') as fw:
             pickle.dump(clips_test, fw)
         
-        clips_train.rename_file(group)
-        clips_test.rename_file(group)
+        process_train.rename_file(group)
+        process_test.rename_file(group)
 
