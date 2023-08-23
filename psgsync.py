@@ -193,7 +193,7 @@ class PSG_split():
                     if i==re.findall(pattern,j)[0] :
                         if re.findall(pattern,j)[1] not in clip_num.keys() or clip_num[re.findall(pattern,j)[1]]<=int(re.findall(pattern,j)[2]):
                             clip_num[re.findall(pattern,j)[1]] = int(re.findall(pattern,j)[2])
-                # Only get disconnected patient
+                # Get disconnected patient only
                 if len(clip_num.keys())>1:
                     k = sorted(list(clip_num.keys()))
                     for key in k:
@@ -347,8 +347,8 @@ if __name__ == "__main__":
     process_test = PSG_split(parser, mode='test')
 
     # Save all psg data to OUTPUT_DIR
-    # process_train.save_all_psg()
-    # process_test.save_all_psg()
+    process_train.save_all_psg()
+    process_test.save_all_psg()
 
     #Save clips in pkl format
     for group in tqdm(os.listdir(SOUND_DIR)):  # Currently there are upto data5 group
