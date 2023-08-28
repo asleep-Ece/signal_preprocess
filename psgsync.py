@@ -100,7 +100,7 @@ class PSG_split():
                 else:
                     # Discard redundant labels and corresponding data
                     red_labels = math.ceil(-flag/(epoch*raw_rate))
-                    temp_labels = temp_labels[:-red_labels]
+                    temp_labels = temp_labels[:-red_labels-1]
                     # print(f"offset: {-flag}, red_labels {red_labels} rate {raw_rate}")
                     edd_off = len(raw_data)-len(temp_labels)*epoch*int(raw_rate)
                     raw_data = raw_data[:-edd_off]
